@@ -5,9 +5,16 @@ services:
     container_name: litepan
     environment:
       - TZ=Asia/Shanghai
+      - LITEPAN_DATA_DIR=/app/data
+      - LITEPAN_LISTEN=:5211
+      - LITEPAN_LOG_LEVEL=info
+      - 'LITEPAN_LOCAL_SOURCES={"临时-1":"/vol1/1000/临时-1","临时-2":"/vol2/1000/临时-2","pve_backup":"/vol1/1000/pve_backup","spare_backup":"/vol2/1000/spare_backup"}'
     volumes:
-      - /vol1/1000/docker/litepango/data:/app/data
-      - /vol1/1000/docker/litepango/mounts:/app/mounts:shared
+      - /vol1/1000/litepan/data:/app/data
+      - /vol1/1000/litepan/mounts:/app/mounts:shared
+      - /vol1/1000:/vol1/1000
+      - /vol2/1000:/vol2/1000
+      - /usr/trim/var/backup_service:/usr/trim/var/backup_service:ro
     devices:
       - /dev/fuse:/dev/fuse
     privileged: true

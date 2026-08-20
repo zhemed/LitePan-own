@@ -44,7 +44,7 @@ docker run -d --name litepan --restart always -p 5211:5211 litepan-own
 
 ## 支持驱动
 
-115、123、139、189（天翼）、百度、夸克、OneDrive、WebDAV、本地目录等
+当前注册：**115 云盘**、**天翼云盘（189）**（其余驱动代码已归档，需要时可恢复）
 
 ## 许可
 

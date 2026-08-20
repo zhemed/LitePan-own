@@ -1,0 +1,17 @@
+import { http } from "./client";
+import type { Account } from "./types";
+
+export interface PublicSystemConfig {
+  index_account_switch_mode: "dropdown" | "floating";
+  header_effects_enabled?: boolean;
+}
+
+export interface CacheHitRateResult {
+  hit_rate: number;
+}
+
+export const publicApi = {
+  listAccounts: () => http.get<Account[]>("/public/accounts"),
+  systemConfig: () => http.get<PublicSystemConfig>("/public/system-config"),
+  cacheHitRate: () => http.get<CacheHitRateResult>("/public/cache/hit-rate"),
+};

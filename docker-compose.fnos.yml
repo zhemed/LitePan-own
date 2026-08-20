@@ -1,0 +1,17 @@
+# Docker 环境标准：Docker 29.7.2 + Compose v5.4.0（部署前运行 ./check-docker-env.sh 校验）
+services:
+  litepan:
+    build: .
+    container_name: litepan
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - /vol1/1000/docker/litepango/data:/app/data
+      - /vol1/1000/docker/litepango/strm:/app/strm
+      - /vol1/1000/docker/litepango/mounts:/app/mounts:shared
+    devices:
+      - /dev/fuse:/dev/fuse
+    privileged: true
+    pid: "host"
+    network_mode: "host"
+    restart: always

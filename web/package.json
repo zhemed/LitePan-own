@@ -1,0 +1,44 @@
+{
+  "name": "litepan-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build && node scripts/compress-build.mjs",
+    "preview": "vite preview",
+    "type-check": "vue-tsc -b"
+  },
+  "dependencies": {
+    "@aiden0z/pptx-renderer": "^1.2.4",
+    "@fortawesome/fontawesome-free": "^6.7.2",
+    "@panzoom/panzoom": "^4.6.2",
+    "@zip.js/zip.js": "^2.8.34",
+    "chardet": "^2.2.0",
+    "docx-preview": "^0.4.0",
+    "dompurify": "^3.4.12",
+    "gsap": "^3.15.0",
+    "heic-to": "^1.5.2",
+    "hls.js": "^1.6.16",
+    "libbitsub": "^1.11.0",
+    "markdown-it": "^14.3.0",
+    "markdown-it-anchor": "^9.2.1",
+    "media-captions": "^0.0.18",
+    "media-chrome": "^4.19.2",
+    "mpegts.js": "^1.8.0",
+    "pdfjs-dist": "^5.7.284",
+    "pinia": "^3.0.4",
+    "rtf.js": "^3.0.9",
+    "vue": "^3.5.40",
+    "vue-router": "^5.2.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^26.1.2",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "typescript": "^6.0.3",
+    "vite": "^8.2.0",
+    "vue-tsc": "^3.3.9"
+  }
+}

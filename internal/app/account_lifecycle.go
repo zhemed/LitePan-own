@@ -1,0 +1,78 @@
+package app
+
+import (
+	"context"
+	"fmt"
+
+	"litepan/internal/cacheretention"
+	"litepan/internal/domain"
+	"litepan/internal/favorites"
+	"litepan/internal/fusemount"
+	"litepan/internal/fusereadcache"
+	"litepan/internal/offlinedownload"
+	"litepan/internal/upload"
+)
+
+type accountLifecycle struct {
+	fuse      *fusemount.Service
+	readCache *fusereadcache.Service
+	retention *cacheretention.Coordinator
+	favorites *favorites.Service
+	offline   *offlinedownload.Service
+	uploads   *upload.Manager
+}
+
+func (a accountLifecycle) OnAccountDisabled(ctx context.Context, accountID int64) {
+	if accountID <= 0 {
+		return
+	}
+	if a.retention != nil {
+		_, _ = a.retention.PauseByAccount(ctx, accountID, domain.PauseReasonAccountDisabled, "关联的账号已禁用")
+	}
+}
+
+func (a accountLifecycle) OnAccountEnabled(ctx context.Context, accountID int64) {
+	if accountID <= 0 {
+		return
+	}
+	if a.retention != nil {
+		_, _ = a.retention.ResumeByAccount(ctx, accountID)
+	}
+}
+
+func (a accountLifecycle) OnAccountDeleted(ctx context.Context, accountID int64) error {
+	if accountID <= 0 {
+		return nil
+	}
+	if a.fuse != nil {
+		if err := a.fuse.OnAccountDeleted(ctx, accountID); err != nil {
+			return err
+		}
+	}
+	if a.readCache != nil {
+		if err := a.readCache.InvalidateAccount(ctx, accountID); err != nil {
+			return fmt.Errorf("清理 FUSE 读缓存失败: %w", err)
+		}
+	}
+	if a.retention != nil {
+		if _, err := a.retention.RemoveTasksByAccount(ctx, accountID); err != nil {
+			return fmt.Errorf("清理缓存保持任务失败: %w", err)
+		}
+	}
+	if a.favorites != nil {
+		if err := a.favorites.Delete(ctx, accountID); err != nil {
+			return fmt.Errorf("清理收藏夹失败: %w", err)
+		}
+	}
+	if a.offline != nil {
+		if _, err := a.offline.RemoveTasksByAccount(ctx, accountID); err != nil {
+			return fmt.Errorf("清理离线下载任务失败: %w", err)
+		}
+	}
+	if a.uploads != nil {
+		if _, err := a.uploads.RemoveTasksByAccount(ctx, accountID); err != nil {
+			return fmt.Errorf("清理上传任务失败: %w", err)
+		}
+	}
+	return nil
+}

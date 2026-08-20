@@ -10,15 +10,10 @@ type Store struct {
 	Configs             domain.ConfigRepository
 	Notifications       domain.NotificationRepository
 	ApiKeys             domain.ApiKeyRepository
-	StrmTasks           domain.StrmTaskRepository
-	StrmBranches        domain.StrmBranchRepository
 	UploadTasks         domain.UploadTaskRepository
 	OfflineDownloads    domain.OfflineDownloadTaskRepository
-	MediaOrganizeTasks  domain.MediaOrganizeTaskRepository
 	FuseMounts          domain.FuseMountRepository
 	CacheRetentionTasks domain.CacheRetentionTaskRepository
-	AutomationRules     domain.AutomationRuleRepository
-	AutomationRuns      domain.AutomationRunRepository
 }
 
 // New 基于已打开的 DB 构造仓储集合。
@@ -30,14 +25,9 @@ func New(db *DB) *Store {
 		Configs:             &configRepo{db: db},
 		Notifications:       &notificationRepo{db: db},
 		ApiKeys:             &apiKeyRepo{db: db},
-		StrmTasks:           &strmTaskRepo{db: db},
-		StrmBranches:        &strmBranchRepo{db: db},
 		UploadTasks:         &uploadTaskRepo{db: db},
 		OfflineDownloads:    &offlineDownloadTaskRepo{db: db},
-		MediaOrganizeTasks:  &mediaOrganizeTaskRepo{db: db},
 		FuseMounts:          &fuseMountRepo{db: db},
 		CacheRetentionTasks: &cacheRetentionRepo{db: db},
-		AutomationRules:     &automationRuleRepo{db: db},
-		AutomationRuns:      &automationRunRepo{db: db},
 	}
 }

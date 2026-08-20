@@ -26,43 +26,6 @@ const (
 	KeyLogLevel                    = "log_level"
 	KeyLogRetentionDays            = "log_retention_days"
 	KeyLogErrorAckAt               = "log_error_ack_at"
-	KeyEmbyEnabled                 = "emby_enabled"
-	KeyEmbyURL                     = "emby_url"
-	KeyEmbyAPIKey                  = "emby_api_key"
-	KeyEmbyProxyPort               = "emby_proxy_port"
-	KeyFnosEnabled                 = "fnos_enabled"
-	KeyFnosURL                     = "fnos_url"
-	KeyFnosProxyPort               = "fnos_proxy_port"
-	KeyFnosStrmPathMaps            = "fnos_strm_path_maps"
-	KeyStrmToken                   = "strm_token"
-	KeyStrmBaseURL                 = "strm_base_url"
-	KeyStrmSignatureEnabled        = "strm_signature_enabled"
-	KeyStrmDefaultScanInterval     = "strm_default_scan_interval"
-	KeyStrmDefaultExtensions       = "strm_default_extensions"
-	KeyStrmISOFilenameEnabled      = "strm_iso_filename_enabled"
-	KeyStrmMinFileSizeMB           = "strm_min_file_size_mb"
-	KeyStrmConflictPolicy          = "strm_conflict_policy"
-	KeyStrmTaskConcurrency         = "strm_task_concurrency"
-	KeyStrmMetadataExtensions      = "strm_metadata_extensions"
-	KeyStrmMetadataMaxSizeMB       = "strm_metadata_max_size_mb"
-	KeyStrmMetadataParentEnabled   = "strm_metadata_parent_enabled"
-	KeyStrmMetadataSyncMode        = "strm_metadata_sync_mode"
-	KeyStrmScrapeWriteMode         = "strm_scrape_write_mode"
-
-	KeyMOProxyEnabled          = "mo_proxy_enabled"
-	KeyMOProxyURL              = "mo_proxy_url"
-	KeyMOProxyUsername         = "mo_proxy_username"
-	KeyMOProxyPassword         = "mo_proxy_password"
-	KeyMOTmdbAPIKey            = "mo_tmdb_api_key"
-	KeyMOTmdbLanguage          = "mo_tmdb_language"
-	KeyMOAPIRequestIntervalMS  = "mo_api_request_interval_ms"
-	KeyMOTmdbRequestIntervalMS = "mo_tmdb_request_interval_ms"
-	KeyMOFileExtensions        = "mo_file_extensions"
-	KeyMOMetadataExtensions    = "mo_metadata_extensions"
-	KeyMOMediaTagOrder         = "mo_media_tag_order"
-	KeyMOAlignMediaTags        = "mo_align_media_tags"
-	KeyMOMaxWorksPerRun        = "mo_max_works_per_run"
-	KeyMOOverwriteExisting     = "mo_overwrite_existing"
 )
 
 // Type 决定后台表单控件与校验方式。
@@ -151,46 +114,6 @@ func defaultSpecs() []Spec {
 			{Value: "error", Label: "Error（错误）"},
 		}),
 		intSpec(KeyLogRetentionDays, "system", "日志保留天数", "按天落盘日志的保留期。自动清理与日志页手动清理都会按该天数删除更早的旧日志。", "30", "天", 1, 365),
-		boolSpec(KeyEmbyEnabled, "emby", "启用 Emby 反代", "开启后且填写反代端口时，LitePan 会启动 Emby 反代服务；不填端口时仅保存 Emby 连接配置。", "false"),
-		stringSpec(KeyEmbyURL, "emby", "Emby 地址", "用于 Emby 反代与后续自动化刷库，例如 http://192.168.1.10:8096。", ""),
-		stringSpec(KeyEmbyAPIKey, "emby", "Emby API Key", "用于访问 Emby 管理 API。返回后台时会脱敏显示。", ""),
-		stringSpec(KeyEmbyProxyPort, "emby", "反代端口", "可留空。填写并启用后，LitePan 会在该端口启动 Emby 反代服务。", ""),
-		boolSpec(KeyFnosEnabled, "fnos", "启用飞牛影视反代", "开启后且填写反代端口时，LitePan 会启动飞牛影视反代服务。", "false"),
-		stringSpec(KeyFnosURL, "fnos", "飞牛影视地址", "飞牛影视服务地址，默认端口 8005，例如 http://192.168.1.10:8005。", ""),
-		stringSpec(KeyFnosProxyPort, "fnos", "反代端口", "可留空。填写并启用后，LitePan 会在该端口启动飞牛影视反代服务。", ""),
-		stringSpec(KeyFnosStrmPathMaps, "fnos", "飞牛 STRM 目录", "填写 Docker 中映射到 /app/strm 的左边路径。例：/vol1/.../LitePanGO:/app/strm → 填 /vol1/.../LitePanGO。两边相同可留空。", ""),
-		stringSpec(KeyStrmToken, "strm", "STRM 播放令牌", "STRM 播放路径鉴权令牌，请在系统设置「API 秘钥」中管理。", ""),
-		stringSpec(KeyStrmBaseURL, "strm", "STRM 基础地址", "生成本地 .strm 时使用的站点基址（例如 https://example.com）。留空时使用当前服务监听地址。", ""),
-		boolSpec(KeyStrmSignatureEnabled, "strm", "启用 STRM 路径签名", "开启后 /api/strm/play 路径必须携带有效签名。", "false"),
-		intSpec(KeyStrmDefaultScanInterval, "strm", "STRM 默认扫描间隔", "新建任务未指定扫描间隔时使用。", "360", "分钟", 1, 1440),
-		stringSpec(KeyStrmDefaultExtensions, "strm", "默认同步文件类型", "STRM 任务未单独指定扩展名时使用，英文分号分隔。", "mp4;mkv;avi;mov;wmv;flv;ts;m2ts;mpg;mpeg;webm;m4v;iso;rmvb;mp3;flac;aac;wav;m4a"),
-		boolSpec(KeyStrmISOFilenameEnabled, "strm", "ISO 使用 .iso.strm 文件名", "开启后网盘 .iso 文件生成“文件名.iso.strm”，方便 Infuse 识别 ISO。关闭时保持现有“文件名.strm”命名。", "false"),
-		intSpec(KeyStrmMinFileSizeMB, "strm", "小文件过滤", "忽略小于该大小的媒体文件，0 表示不过滤。", "0", "MB", 0, 10240),
-		stringSpec(KeyStrmConflictPolicy, "strm", "同名冲突策略", "同目录同名不同后缀时保留哪一个：size_desc / size_asc / name_asc。", "size_desc"),
-		intSpec(KeyStrmTaskConcurrency, "strm", "STRM 任务并发", "同时运行的 STRM 扫描任务上限。", "3", "", 1, 10),
-		stringSpec(KeyStrmMetadataExtensions, "strm", "元数据扩展名", "任务开启同步元数据时使用的扩展名，英文分号分隔。", "srt;ass;ssa;sub;sup;idx;vtt;nfo;jpg;jpeg;png;webp;bmp;gif"),
-		intSpec(KeyStrmMetadataMaxSizeMB, "strm", "元数据大小上限", "同步元数据时忽略超过该大小的文件。", "10", "MB", 1, 1024),
-		boolSpec(KeyStrmMetadataParentEnabled, "strm", "父目录元数据同步", "子目录有影片时，也同步父目录下的海报、nfo 等元数据。", "true"),
-		selectSpec(KeyStrmMetadataSyncMode, "strm", "元数据同步策略", "local_primary=保留本地并从云端补缺；cloud_primary=本地目录与云端保持一致；bidirectional=本地与云端互相补缺。", "local_primary", []Option{
-			{Value: "cloud_primary", Label: "网盘元数据为主"},
-			{Value: "local_primary", Label: "本地元数据补缺"},
-			{Value: "bidirectional", Label: "本地与云端互补"},
-		}),
-		stringSpec(KeyStrmScrapeWriteMode, "strm", "STRM 刮削写入策略", "missing_only=仅补缺；overwrite=覆盖已有 nfo/海报。", "missing_only"),
-		boolSpec(KeyMOProxyEnabled, "media_organize", "启用代理", "TMDB 请求经代理出站。", "false"),
-		stringSpec(KeyMOProxyURL, "media_organize", "代理地址", "HTTP/HTTPS 代理地址，例如 http://127.0.0.1:7890。", ""),
-		stringSpec(KeyMOProxyUsername, "media_organize", "代理用户名", "代理认证用户名，无认证可留空。", ""),
-		stringSpec(KeyMOProxyPassword, "media_organize", "代理密码", "代理认证密码。", ""),
-		stringSpec(KeyMOTmdbAPIKey, "media_organize", "TMDB API Key", "The Movie Database API 密钥。", ""),
-		stringSpec(KeyMOTmdbLanguage, "media_organize", "TMDB 搜索语言", "TMDB 搜索与详情语言，例如 zh-CN。", "zh-CN"),
-		intSpec(KeyMOAPIRequestIntervalMS, "media_organize", "API 额外补偿间隔", "网盘 API 请求之间的额外等待时间。", "300", "毫秒", 50, 10000),
-		intSpec(KeyMOTmdbRequestIntervalMS, "media_organize", "TMDB 请求间隔", "两次 TMDB API 请求之间的最小间隔。", "250", "毫秒", 100, 5000),
-		stringSpec(KeyMOFileExtensions, "media_organize", "媒体文件扩展名", "参与整理的媒体扩展名，英文分号分隔。", "mkv;mp4;avi;ts;mov;wmv;iso;m2ts;rmvb;flv;m4v;webm"),
-		stringSpec(KeyMOMetadataExtensions, "media_organize", "元数据文件扩展名", "随媒体一起整理的元数据扩展名，英文分号分隔。", "nfo;ass;ssa;srt;sub;idx;sup;vtt;jpg;jpeg;png;webp;bmp"),
-		stringSpec(KeyMOMediaTagOrder, "media_organize", "媒体信息标签排序", "重命名时媒体标签的排列顺序，JSON 数组字符串。", `["screen_size","video_codec","audio_codec","audio_channels"]`),
-		boolSpec(KeyMOAlignMediaTags, "media_organize", "强迫症模式", "同后缀文件保持媒体信息标签一致。", "false"),
-		intSpec(KeyMOMaxWorksPerRun, "media_organize", "每次最多整理作品数", "单次执行最多处理的作品数，0 表示不限制。", "50", "", 0, 10000),
-		boolSpec(KeyMOOverwriteExisting, "media_organize", "同名冲突时覆盖", "目标位置已有同名文件时覆盖，默认跳过。", "false"),
 		{
 			Key:         KeyOAuthServerURL,
 			Type:        TypeString,
@@ -214,7 +137,5 @@ func categories() []Category {
 	return []Category{
 		{ID: "system", Label: "系统设置"},
 		{ID: "performance", Label: "性能设置"},
-		{ID: "strm", Label: "STRM 设置"},
-		{ID: "media_organize", Label: "媒体整理设置"},
 	}
 }

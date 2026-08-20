@@ -19,6 +19,7 @@
 ```bash
 docker pull ghcr.io/zhemed/litepan-own:0.0.1
 docker run -d --name litepan --restart unless-stopped --network host \
+  -e TZ=Asia/Shanghai \
   -e LITEPAN_LISTEN=:5211 \
   -e "LITEPAN_LOCAL_SOURCES={\"临时-1\":\"/vol1/1000/临时-1\"}" \
   -v /vol1/1000:/vol1/1000 \

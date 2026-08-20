@@ -14,7 +14,7 @@
 
 ## 部署
 
-### 方式一：GitHub 镜像拉取（推荐）
+### 方式一：直接拉取镜像（GHCR，推荐）
 
 ```bash
 docker pull ghcr.io/zhemed/litepan-own:0.0.1

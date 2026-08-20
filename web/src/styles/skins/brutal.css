@@ -87,7 +87,6 @@
   color: var(--brutal-ink);
 }
 
-/* ===== 跨盘秒传：限定 .cross-transfer，不用大偏移阴影，避免布局与边缘露色 ===== */
 :root[data-skin="brutal"] .cross-transfer {
   --fc-pill-bg: var(--brutal-blue);
   --fc-pill-fg: var(--brutal-ink);

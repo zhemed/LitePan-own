@@ -24,7 +24,7 @@ type localBrowseResult struct {
 }
 
 func browseDefaultPath() string {
-	for _, candidate := range []string{"/app/strm", "/app/data", "/app/mounts", "/app", "/data", "/mnt", "/media", "/"} {
+	for _, candidate := range []string{"/app/data", "/app/mounts", "/app", "/data", "/mnt", "/media", "/"} {
 		info, err := os.Stat(candidate)
 		if err == nil && info.IsDir() {
 			return candidate

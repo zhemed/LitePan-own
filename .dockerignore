@@ -26,6 +26,10 @@ web/*.tsbuildinfo
 .DS_Store
 .env
 .env.*
+secret.key
+*.key
+*.pem
+*.p12
 
 # 构建不需要的测试与文档
 **/*_test.go

@@ -23,6 +23,9 @@ const (
 	defaultSessionTimeout = 7200
 	tempPasswordTTL       = 600
 	resetCooldownSeconds  = 60
+	loginMaxAttempts      = 5
+	loginWindowSeconds    = 900 // 15min
+	loginBlockSeconds     = 900
 
 	KeyAdminUsername              = "admin_username"
 	KeyAdminPassword              = "admin_password"
@@ -104,6 +107,12 @@ type UpdateCredentialsRequest struct {
 	AuthActiveRefreshEnabled   *bool    `json:"auth_active_refresh_enabled"`
 }
 
+type loginAttempt struct {
+	count      int
+	windowStart int64
+	blockUntil int64
+}
+
 type Service struct {
 	configs domain.ConfigRepository
 	secret  []byte
@@ -112,6 +121,9 @@ type Service struct {
 	resetIPCooldown sync.Map
 	resetLastAt     int64
 	resetMu         sync.Mutex
+
+	loginAttempts sync.Map // ip -> *loginAttempt
+	loginMu       sync.Mutex
 }
 
 func New(configs domain.ConfigRepository, secret []byte, log *slog.Logger) *Service {
@@ -131,8 +143,8 @@ func (s *Service) ReadSession(r *http.Request) (*Session, bool) {
 		return nil, false
 	}
 	raw := strings.TrimSpace(c.Value)
-	// 自用部署：登录会话不设限期（原 30 天）。
-	payload, err := s.serializer().Loads(raw, 0)
+	// 会话最长 30 天，Remember=false 时额外按 session_timeout 校验 CreatedAt
+	payload, err := s.serializer().Loads(raw, 30*24*3600)
 	if err != nil {
 		return nil, false
 	}
@@ -160,9 +172,7 @@ func (s *Service) WriteSession(w http.ResponseWriter, r *http.Request, sess Sess
 	if strings.TrimSpace(sess.CreatedAt) == "" {
 		sess.CreatedAt = time.Now().Format(time.RFC3339)
 	}
-	// 自用部署：登录永不过期，无论是否勾选记住。
-	sess.Remember = true
-	_ = remember
+	sess.Remember = remember
 	raw, err := json.Marshal(sess)
 	if err != nil {
 		return err
@@ -171,6 +181,11 @@ func (s *Service) WriteSession(w http.ResponseWriter, r *http.Request, sess Sess
 	if err != nil {
 		return err
 	}
+	timeout := s.sessionTimeout(r.Context())
+	maxAge := timeout
+	if remember {
+		maxAge = 30 * 24 * 3600 // 记住我：30 天
+	}
 	cookie := &http.Cookie{
 		Name:     cookieName,
 		Value:    token,
@@ -178,9 +193,8 @@ func (s *Service) WriteSession(w http.ResponseWriter, r *http.Request, sess Sess
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   security.SecureCookie(r),
+		MaxAge:   maxAge,
 	}
-	// 自用部署：cookie 长期有效（10 年），登录不过期。
-	cookie.MaxAge = 315360000
 	http.SetCookie(w, cookie)
 	return nil
 }
@@ -202,11 +216,15 @@ func (s *Service) Status(ctx context.Context, r *http.Request) Status {
 	if !ok || sess == nil {
 		return Status{PublicIndexEnabled: publicIndex}
 	}
-	// 自用部署：默认凭据不触发强制改密；仅临时密码会话提示。
-	mustChange := sess.MustChangePassword
+	state := s.credentialState(ctx)
+	mustChange := sess.MustChangePassword || state.MustChangePassword
 	reason := sess.PasswordChangeReason
 	if mustChange && reason == "" {
-		reason = "temporary_password"
+		if state.MustChangePassword {
+			reason = state.PasswordChangeReason
+		} else {
+			reason = "temporary_password"
+		}
 	}
 	return Status{
 		IsAdmin:              true,
@@ -218,12 +236,62 @@ func (s *Service) Status(ctx context.Context, r *http.Request) Status {
 }
 
 func (s *Service) Login(ctx context.Context, r *http.Request, w http.ResponseWriter, username, password string, remember bool) (*LoginResult, error) {
+	ip := clientIP(r)
+	if ip != "" {
+		if v, ok := s.loginAttempts.Load(ip); ok {
+			la := v.(*loginAttempt)
+			now := time.Now().Unix()
+			if la.blockUntil > now {
+				return nil, domain.Errorf(domain.CodeRateLimited, "登录过于频繁，请 %d 秒后再试", la.blockUntil-now)
+			}
+			if now-la.windowStart > loginWindowSeconds {
+				s.loginMu.Lock()
+				la.count = 0
+				la.windowStart = now
+				la.blockUntil = 0
+				s.loginMu.Unlock()
+			} else if la.count >= loginMaxAttempts {
+				s.loginMu.Lock()
+				la.blockUntil = now + loginBlockSeconds
+				s.loginMu.Unlock()
+				s.log.Warn("登录因频繁失败被临时封禁", "ip", ip, "count", la.count)
+				return nil, domain.Errorf(domain.CodeRateLimited, "登录失败次数过多，已临时封禁 15 分钟")
+			}
+		}
+	}
+	recordLoginFailure := func() {
+		if ip == "" {
+			return
+		}
+		now := time.Now().Unix()
+		s.loginMu.Lock()
+		defer s.loginMu.Unlock()
+		v, _ := s.loginAttempts.LoadOrStore(ip, &loginAttempt{windowStart: now})
+		la := v.(*loginAttempt)
+		if now-la.windowStart > loginWindowSeconds {
+			la.count = 1
+			la.windowStart = now
+			la.blockUntil = 0
+		} else {
+			la.count++
+			if la.count >= loginMaxAttempts {
+				la.blockUntil = now + loginBlockSeconds
+			}
+		}
+	}
+	clearLoginAttempts := func() {
+		if ip == "" {
+			return
+		}
+		s.loginAttempts.Delete(ip)
+	}
 	storedUsername, storedPassword := s.adminCredentials(ctx)
 	if username != storedUsername {
-		s.log.Warn("管理员登录失败", "username", username, "ip", clientIP(r))
+		s.log.Warn("管理员登录失败", "username", username, "ip", ip)
+		recordLoginFailure()
 		return nil, domain.Errorf(domain.CodeAdminAuthRequired, "用户名或密码错误")
 	}
-	_ = security.AssessAdminCredentialState(storedUsername, storedPassword)
+	state := security.AssessAdminCredentialState(storedUsername, storedPassword)
 	temp := s.tempPasswordState(ctx)
 	passwordMatch := security.VerifyAdminPassword(storedPassword, password)
 	tempMatch := false
@@ -231,15 +299,17 @@ func (s *Service) Login(ctx context.Context, r *http.Request, w http.ResponseWri
 		tempMatch = security.CheckPasswordHash(temp.Hash, password)
 	}
 	if !passwordMatch && !tempMatch {
-		s.log.Warn("管理员登录失败", "username", username, "ip", clientIP(r))
+		s.log.Warn("管理员登录失败", "username", username, "ip", ip)
+		recordLoginFailure()
 		return nil, domain.Errorf(domain.CodeAdminAuthRequired, "用户名或密码错误")
 	}
-	// 自用部署不强制修改默认密码：仅临时密码登录时提示改密；
-	// 默认凭据登录也不标记 reason，前端不再展示改密遮挡。
-	mustChange := tempMatch
+	clearLoginAttempts()
+	mustChange := tempMatch || state.MustChangePassword
 	reason := ""
 	if tempMatch {
 		reason = "temporary_password"
+	} else if state.MustChangePassword {
+		reason = state.PasswordChangeReason
 	}
 	sess := Session{
 		IsAdmin:              true,
@@ -297,8 +367,9 @@ func (s *Service) ResetPassword(ctx context.Context, r *http.Request) (map[strin
 	if ip != "" {
 		s.resetIPCooldown.Store(ip, now)
 	}
-	s.log.Warn("管理员临时密码已生成，请尽快登录并修改密码。")
-	fmt.Printf("\n[重置密码] 临时管理员密码: %s (有效期 %d 分钟，过期后失效；原密码仍可用；使用临时密码登录后需修改密码)\n\n", password, tempPasswordTTL/60)
+	s.log.Warn("管理员临时密码已生成，请尽快登录并修改密码。", "prefix", password[:2], "suffix", password[len(password)-2:], "ip", ip)
+	// 控制台仅输出前后缀，避免明文落盘到日志采集；完整密码如需查看请通过受限日志级别
+	fmt.Printf("\n[重置密码] 临时密码已生成（有效期 %d 分钟，前缀 %s…后缀 %s），请及时登录并改密；原密码仍可用\n\n", tempPasswordTTL/60, password[:2], password[len(password)-2:])
 	return map[string]any{
 		"expires_at":        expiresAt,
 		"remaining_seconds": tempPasswordTTL,
@@ -318,11 +389,16 @@ func (s *Service) EnsureAdminAccess(ctx context.Context, r *http.Request, sess *
 		return nil
 	}
 	state := s.credentialState(ctx)
-	if sess.MustChangePassword {
-		return domain.Errorf(domain.CodePermissionDenied, "当前会话使用临时密码登录，请先到系统设置修改管理员密码")
+	if sess.MustChangePassword || state.MustChangePassword {
+		reason := sess.PasswordChangeReason
+		if reason == "" {
+			reason = state.PasswordChangeReason
+		}
+		if reason == "" {
+			reason = "default_credentials"
+		}
+		return domain.Errorf(domain.CodePermissionDenied, "当前会话需要修改管理员密码（原因：%s），请先到系统设置修改", reason)
 	}
-	// 自用部署：默认凭据（admin/admin）不强制改密，管理操作直接放行。
-	_ = state
 	return nil
 }
 
@@ -338,7 +414,7 @@ func (s *Service) EnsurePublicOrAdmin(ctx context.Context, r *http.Request) (*Se
 
 func (s *Service) SystemConfig(ctx context.Context) SystemConfig {
 	username, password := s.adminCredentials(ctx)
-	_ = security.AssessAdminCredentialState(username, password)
+	state := security.AssessAdminCredentialState(username, password)
 	return SystemConfig{
 		AdminUsername:              username,
 		SessionTimeout:             float64(s.sessionTimeout(ctx)) / 3600,
@@ -347,8 +423,8 @@ func (s *Service) SystemConfig(ctx context.Context) SystemConfig {
 		AdminHomeReturnMode:        s.adminHomeReturnMode(ctx),
 		HeaderEffectsEnabled:       s.headerEffectsEnabled(ctx),
 		IndexStrmAutoDetectEnabled: s.indexStrmAutoDetectEnabled(ctx),
-		MustChangePassword:         false, // 自用部署：不强制改密
-		PasswordChangeReason:       "",
+		MustChangePassword:         state.MustChangePassword,
+		PasswordChangeReason:       state.PasswordChangeReason,
 		OAuthServerURL:             s.configString(ctx, domain.SettingOAuthServerURL, domain.DefaultOAuthServerURL),
 		UploadTaskConcurrency:      s.configInt(ctx, "upload_task_concurrency", 3),
 		LogRetentionDays:           s.configInt(ctx, "log_retention_days", 30),
@@ -477,6 +553,9 @@ func validateAdminUsername(username string) error {
 	if username == "" {
 		return domain.Errorf(domain.CodeValidation, "用户名不能为空")
 	}
+	if len(username) < 3 || len(username) > 32 {
+		return domain.Errorf(domain.CodeValidation, "用户名长度必须为 3-32 字符")
+	}
 	for _, ch := range username {
 		valid := (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
 		if !valid {
@@ -493,9 +572,9 @@ func (s *Service) refreshSession(ctx context.Context, r *http.Request, w http.Re
 		remember = sess.Remember
 		newSess.CreatedAt = sess.CreatedAt
 	}
-	// 自用部署：刷新会话不重新标记强制改密。
-	newSess.MustChangePassword = false
-	newSess.PasswordChangeReason = ""
+	state := s.credentialState(ctx)
+	newSess.MustChangePassword = state.MustChangePassword
+	newSess.PasswordChangeReason = state.PasswordChangeReason
 	return s.WriteSession(w, r, newSess, remember)
 }
 
@@ -515,7 +594,7 @@ func (s *Service) credentialState(ctx context.Context) security.CredentialState 
 }
 
 func (s *Service) publicIndexEnabled(ctx context.Context) bool {
-	return s.configBool(ctx, KeyPublicIndexEnabled, true)
+	return s.configBool(ctx, KeyPublicIndexEnabled, false)
 }
 
 func (s *Service) webdavEnabled(ctx context.Context) bool {

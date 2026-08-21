@@ -10,6 +10,9 @@ import (
 
 func LoadOrCreate(dataDir string) ([]byte, error) {
 	if v := os.Getenv("LITEPAN_SECRET_KEY"); v != "" {
+		if len(v) < 32 {
+			return nil, fmt.Errorf("LITEPAN_SECRET_KEY too weak: need at least 32 chars, got %d", len(v))
+		}
 		return []byte(v), nil
 	}
 	path := filepath.Join(dataDir, "secret.key")

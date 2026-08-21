@@ -33,4 +33,8 @@ dist/*.tar.gz
 # 环境与密钥
 .env
 .env.*
+secret.key
+*.key
+*.pem
+*.p12
 drivers/115/

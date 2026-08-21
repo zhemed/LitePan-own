@@ -35,16 +35,16 @@ RUN go build -tags "${BUILD_TAGS}" -trimpath -ldflags="-s -w" -o /out/litepan ./
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata fuse3 \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata fuse3 curl \
     && sed -i 's/^#user_allow_other/user_allow_other/' /etc/fuse.conf 2>/dev/null || true \
     && grep -q '^user_allow_other' /etc/fuse.conf || echo user_allow_other >> /etc/fuse.conf \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-RUN mkdir -p /app/data/log /app/mounts
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -r -u 1000 -m -d /home/litepan -s /usr/sbin/nologin litepan \
+    && mkdir -p /app/data/log /app/mounts \
+    && chown -R litepan:litepan /app /home/litepan
 
 COPY --from=build /out/litepan /app/litepan
+RUN chown litepan:litepan /app/litepan && chmod 755 /app/litepan
 
 ENV LITEPAN_DATA_DIR=/app/data \
     LITEPAN_LISTEN=:5211 \
@@ -54,5 +54,11 @@ ENV LITEPAN_DATA_DIR=/app/data \
 EXPOSE 5211 42069/tcp 42069/udp
 
 VOLUME ["/app/data", "/app/mounts"]
+
+# 健康检查：依赖 curl，容器以 litepan 用户运行
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:5211/api/health || exit 1
+
+USER litepan
 
 ENTRYPOINT ["/app/litepan"]

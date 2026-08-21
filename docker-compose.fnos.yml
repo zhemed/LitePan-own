@@ -17,7 +17,13 @@ services:
       - /usr/trim/var/backup_service:/usr/trim/var/backup_service:ro
     devices:
       - /dev/fuse:/dev/fuse
-    privileged: true
-    pid: "host"
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    # fnOS 场景需 host 网络以暴露 42069 磁力端口；若仅 WebDAV 可改桥接
     network_mode: "host"
+    # 仅在 fnOS 宿主机需要时启用 pid host，否则与 cap_add 互斥时可移除
+    # pid: "host"
     restart: always
+    read_only: false

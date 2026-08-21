@@ -35,8 +35,19 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/three')) {
-            return 'three-vendor';
+          if (
+            id.includes('node_modules/pdfjs-dist') ||
+            id.includes('node_modules/heic-to') ||
+            id.includes('node_modules/hls.js') ||
+            id.includes('node_modules/mpegts.js') ||
+            id.includes('node_modules/xlsx') ||
+            id.includes('node_modules/libbitsub') ||
+            id.includes('node_modules/@aiden0z/pptx-renderer') ||
+            id.includes('node_modules/docx-preview') ||
+            id.includes('node_modules/rtf.js') ||
+            id.includes('node_modules/zip.js')
+          ) {
+            return 'preview-vendor';
           }
           if (id.includes('node_modules/vue') || id.includes('node_modules/pinia') || id.includes('node_modules/vue-router')) {
             return 'vue-vendor';

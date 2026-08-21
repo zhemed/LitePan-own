@@ -75,35 +75,31 @@ func TestDefaultAdminPasswordIsInitializedAsHashAndMustChange(t *testing.T) {
 }
 
 func TestReadSessionNeverExpiresSelfHosted(t *testing.T) {
-	// 自用部署：登录永不过期（无论 sessionTimeout 如何配置）。
+	// 加固后：remember=false 时会话按 sessionTimeout 过期，remember=true 时 30 天。
 	svc, configs, ctx := newTestAuth(t)
 	_ = configs.Set(ctx, KeySessionTimeout, "1800")
 
+	// remember=false -> MaxAge 应为 sessionTimeout (1800) 且 Remember=false
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	if err := svc.WriteSession(rec, req, Session{IsAdmin: true, Username: "admin"}, false); err != nil {
 		t.Fatalf("write session: %v", err)
 	}
 	cookie := rec.Result().Cookies()[0]
-	if cookie.MaxAge <= 0 {
-		t.Fatalf("cookie 应长期有效（永不过期），实际 MaxAge=%d", cookie.MaxAge)
+	if cookie.MaxAge != 1800 {
+		t.Fatalf("remember=false 时 MaxAge 应为 sessionTimeout 1800，实际 %d", cookie.MaxAge)
 	}
-
-	sess, ok := svc.ReadSession(httptest.NewRequest(http.MethodGet, "/", nil))
-	_ = sess
-	_ = ok
-
 	checkReq := httptest.NewRequest(http.MethodGet, "/", nil)
 	checkReq.AddCookie(cookie)
 	got, ok := svc.ReadSession(checkReq)
 	if !ok {
 		t.Fatal("session should be valid immediately after login")
 	}
-	if !got.Remember {
-		t.Fatal("自用部署会话应固定为 Remember=true（不过期）")
+	if got.Remember {
+		t.Fatal("remember=false 时会话 Remember 应为 false")
 	}
 
-	// 即使 CreatedAt 超过 sessionTimeout，会话仍然有效。
+	// 超过 sessionTimeout 应过期
 	got.CreatedAt = time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
 	rec2 := httptest.NewRecorder()
 	if err := svc.WriteSession(rec2, checkReq, *got, false); err != nil {
@@ -111,8 +107,24 @@ func TestReadSessionNeverExpiresSelfHosted(t *testing.T) {
 	}
 	expiredReq := httptest.NewRequest(http.MethodGet, "/", nil)
 	expiredReq.AddCookie(rec2.Result().Cookies()[0])
-	if _, ok := svc.ReadSession(expiredReq); !ok {
-		t.Fatal("自用部署会话不应过期")
+	if _, ok := svc.ReadSession(expiredReq); ok {
+		t.Fatal("remember=false 且超过 sessionTimeout 的会话应过期")
+	}
+
+	// remember=true 时 30 天内不过期
+	rec3 := httptest.NewRecorder()
+	if err := svc.WriteSession(rec3, req, Session{IsAdmin: true, Username: "admin"}, true); err != nil {
+		t.Fatalf("write session remember=true: %v", err)
+	}
+	cookie3 := rec3.Result().Cookies()[0]
+	if cookie3.MaxAge != 30*24*3600 {
+		t.Fatalf("remember=true 时 MaxAge 应为 30d，实际 %d", cookie3.MaxAge)
+	}
+	checkReq3 := httptest.NewRequest(http.MethodGet, "/", nil)
+	checkReq3.AddCookie(cookie3)
+	got3, ok := svc.ReadSession(checkReq3)
+	if !ok || !got3.Remember {
+		t.Fatal("remember=true 会话应有效且 Remember=true")
 	}
 }
 

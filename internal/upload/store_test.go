@@ -36,12 +36,16 @@ func TestIsProtectedDeletionPath(t *testing.T) {
 func TestRemoveLocalFileProtection(t *testing.T) {
 	m := &Manager{protectedPaths: []string{"/tmp/lp-protect-test"}, log: slog.Default()}
 	// 受保护路径——即使误设清理模式也不能被删
-	os.MkdirAll("/tmp/lp-protect-test", 0o755)
+	if err := os.MkdirAll("/tmp/lp-protect-test", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 	src := "/tmp/lp-protect-test/important.bin"
-	os.WriteFile(src, []byte("data"), 0o644)
+	if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
 	m.removeLocalFile(src)
 	if _, err := os.Stat(src); err != nil {
 		t.Fatal("受保护路径被误删！")
 	}
-	os.RemoveAll("/tmp/lp-protect-test")
+	_ = os.RemoveAll("/tmp/lp-protect-test")
 }

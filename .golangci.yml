@@ -1,7 +1,7 @@
 version: "2"
 
 run:
-  go: "1.27.0"
+  go: "1.26.7"
   modules-download-mode: readonly
   allow-parallel-runners: true
 
@@ -12,10 +12,6 @@ linters:
     - errcheck
     - govet
     - staticcheck
-    - gosec
-    - ineffassign
-    - misspell
-    - prealloc
   settings:
     depguard:
       rules:

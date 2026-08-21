@@ -14,29 +14,56 @@
 
 ## 部署
 
-### 方式一：直接拉取镜像（GHCR，推荐）
+> **前置**：本项目 Docker 环境固定为 `Docker 29.7.2 + Compose v5.4.0`，任何构建/运行前先校验：
+> ```bash
+> ./check-docker-env.sh  # 通过才继续
+> ```
+
+### 方式一：Compose 一键部署（推荐，含持久化与 FUSE）
 
 ```bash
+git clone https://github.com/zhemed/LitePan-own.git
+cd LitePan-own
+./check-docker-env.sh
+mkdir -p ./data ./mounts && sudo chown -R 1000:1000 ./data ./mounts
+docker compose up -d --build
+# 日志与健康
+docker logs -f litepan
+curl http://127.0.0.1:5211/api/health
+```
+
+### 方式二：GHCR 拉取镜像（fnOS/生产）
+
+```bash
+# 镜像由 CI 在 tag 推送后自动发布到 GHCR，若本地已改动请先 docker build
 docker pull ghcr.io/zhemed/litepan-own:0.0.1
 docker run -d --name litepan --restart unless-stopped --network host \
+  --cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor:unconfined \
   -e TZ=Asia/Shanghai \
   -e LITEPAN_LISTEN=:5211 \
   -e "LITEPAN_LOCAL_SOURCES={\"临时-1\":\"/vol1/1000/临时-1\"}" \
   -v /vol1/1000:/vol1/1000 \
   -v /vol1/1000/litepan/data:/app/data \
+  -v /vol1/1000/litepan/mounts:/app/mounts:shared \
   ghcr.io/zhemed/litepan-own:0.0.1
 ```
 
-### 方式二：源码构建
+### 方式三：源码构建单容器
 
 ```bash
 git clone https://github.com/zhemed/LitePan-own.git
 cd LitePan-own
+./check-docker-env.sh
 docker build -t litepan-own .
-docker run -d --name litepan --restart always -p 5211:5211 litepan-own
+docker run -d --name litepan --restart unless-stopped \
+  -p 5211:5211 -p 42069:42069 -p 42069:42069/udp \
+  --cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor:unconfined \
+  -e TZ=Asia/Shanghai \
+  -v ./data:/app/data -v ./mounts:/app/mounts:shared \
+  litepan-own
 ```
 
-部署完成后访问 `http://<主机>:5211`。
+部署完成后访问 `http://<主机>:5211`，`/api/health` 应返回 `{"status":"ok"}`，容器以 `litepan` 非 root 运行（`docker exec litepan id` → `uid=1000`）。
 
 ## 版本
 

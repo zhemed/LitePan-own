@@ -12,6 +12,10 @@ linters:
     - errcheck
     - govet
     - staticcheck
+    - gosec
+    - ineffassign
+    - misspell
+    - prealloc
   settings:
     depguard:
       rules:

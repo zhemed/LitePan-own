@@ -41,7 +41,7 @@ func AllowedCORSOrigins() []string {
 func RequestOriginAllowed(r *http.Request, allowed []string) bool {
 	requestOrigin := requestOrigin(r)
 	if requestOrigin == "" {
-		return true
+		return false
 	}
 	if requestOrigin == normalizeOrigin(requestBaseURL(r)) {
 		return true
@@ -108,9 +108,12 @@ func SecureCookie(r *http.Request) bool {
 	if strings.EqualFold(proto, "http") {
 		return false
 	}
+	if r.TLS != nil {
+		return true
+	}
 	host := strings.ToLower(strings.TrimSpace(r.Host))
 	if strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") || strings.HasPrefix(host, "[::1]") {
 		return false
 	}
-	return proto != ""
+	return false
 }

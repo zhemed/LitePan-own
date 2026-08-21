@@ -48,4 +48,4 @@ docker run -d --name litepan --restart always -p 5211:5211 litepan-own
 
 ## 许可
 
-AGPL-3.0
+PolyForm Noncommercial 1.0.0 — 仅允许非商业/个人/研究使用，商业使用需另行授权。详见 [`LICENSE`](LICENSE) 与 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。

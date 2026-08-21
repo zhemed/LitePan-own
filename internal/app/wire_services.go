@@ -30,13 +30,13 @@ type servicesBundle struct {
 	favorites        *favorites.Service
 }
 
-func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *coreBundle) *servicesBundle {
+func wireServices(ctx context.Context, cfg config.Config, logs *logx.Manager, st *storeBundle, core *coreBundle) *servicesBundle {
 	favoritesSvc := favorites.NewService(cfg.DBPath, logs.For(logx.ModuleSystem))
 	fileSvc := file.NewService(core.exec, core.cache, st.store.Accounts, core.bus, st.settings, core.listHits)
 	fileSvc.SetLogger(logs.For(logx.ModuleFileOp))
 	playbackSvc := playback.NewService(core.exec, core.cache)
 	retentionSvc, retentionCoord := wireCacheRetention(st, fileSvc, core.cache, core.bus, logs)
-	fuseReadCache := wireFuseReadCacheOrNil(context.Background(), cfg, logs, st, core.bus)
+	fuseReadCache := wireFuseReadCacheOrNil(ctx, cfg, logs, st, core.bus)
 	offlineDownloadSvc := offlinedownload.New(offlinedownload.Options{
 		Exec:     core.exec,
 		Accounts: st.store.Accounts,

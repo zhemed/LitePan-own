@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
 	"sync/atomic"
 
@@ -52,6 +53,17 @@ func Open(ctx context.Context, opts Options) (*DB, error) {
 		_ = write.Close()
 		_ = read.Close()
 		return nil, fmt.Errorf("ping: %w", err)
+	}
+	// 确保数据库文件仅属主可读写（等同密钥），避免明文凭证泄露
+	if !opts.Memory && opts.Path != "" {
+		if err := os.Chmod(opts.Path, 0o600); err != nil && !os.IsNotExist(err) {
+			_ = write.Close()
+			_ = read.Close()
+			return nil, fmt.Errorf("chmod db: %w", err)
+		}
+		// WAL 模式下的附加文件也一并收紧权限（若已存在）
+		_ = os.Chmod(opts.Path+"-wal", 0o600)
+		_ = os.Chmod(opts.Path+"-shm", 0o600)
 	}
 	return &DB{write: write, read: read}, nil
 }

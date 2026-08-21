@@ -81,12 +81,13 @@ func New(ctx context.Context, opts Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	svc := wireServices(cfg, logs, stBundle, core)
+	svc := wireServices(ctx, cfg, logs, stBundle, core)
 
 	httpSrv, err := wireHTTPServer(cfg, logs, stBundle, core, svc)
 	if err != nil {
 		return nil, err
 	}
+	// httpBaseCtx 独立于启动 ctx，生命周期由 App.Shutdown 控制，避免启动 ctx 取消导致请求上下文提前取消
 	httpBaseCtx, httpBaseCancel := context.WithCancel(context.Background())
 	httpSrv.BaseContext = func(_ net.Listener) context.Context { return httpBaseCtx }
 

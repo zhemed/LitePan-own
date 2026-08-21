@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -152,7 +153,12 @@ func tableExists(ctx context.Context, db *DB, name string) (bool, error) {
 	return count > 0, nil
 }
 
+var validTableName = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
+
 func tableColumns(ctx context.Context, db *DB, table string) (map[string]bool, error) {
+	if !validTableName.MatchString(table) {
+		return nil, fmt.Errorf("invalid table name %q", table)
+	}
 	rows, err := db.write.QueryContext(ctx, fmt.Sprintf(`PRAGMA table_info(%s)`, table))
 	if err != nil {
 		return nil, err
@@ -176,13 +182,36 @@ func tableColumns(ctx context.Context, db *DB, table string) (map[string]bool, e
 	return cols, rows.Err()
 }
 
-// splitStatements 按分号拆分迁移脚本（迁移 SQL 内不含分号字面量）。
+// splitStatements 按分号拆分迁移脚本，正确处理引号内的分号。
 func splitStatements(script string) []string {
 	var out []string
-	for _, s := range strings.Split(script, ";") {
-		if s = strings.TrimSpace(s); s != "" {
-			out = append(out, s)
+	var buf strings.Builder
+	inSingle, inDouble := false, false
+	for i := 0; i < len(script); i++ {
+		c := script[i]
+		// 处理引号转义：SQL 中单引号通过 '' 转义
+		if c == '\'' && !inDouble {
+			if i+1 < len(script) && script[i+1] == '\'' {
+				buf.WriteByte(c)
+				buf.WriteByte(script[i+1])
+				i++
+				continue
+			}
+			inSingle = !inSingle
+		} else if c == '"' && !inSingle {
+			inDouble = !inDouble
 		}
+		if c == ';' && !inSingle && !inDouble {
+			if s := strings.TrimSpace(buf.String()); s != "" {
+				out = append(out, s)
+			}
+			buf.Reset()
+			continue
+		}
+		buf.WriteByte(c)
+	}
+	if s := strings.TrimSpace(buf.String()); s != "" {
+		out = append(out, s)
 	}
 	return out
 }

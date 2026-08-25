@@ -1,160 +1,89 @@
-<a name="readme-top"></a>
+# LitePan-own
+
+> **Fork 自 [Ponphil/LitePan](https://github.com/Ponphil/LitePan) `v0.5.1-beta`，自用版 — 新增「本地自动上传」**
+
+`99` 闭环已验，`11` 生产待推。本仓库在上游基础上**只加一个功能**：把飞牛上 3 个本地目录（`我的文件/杂物间/pve_backup`）按 `daily 02:00` 全量 `hash` 增量自动推到天翼云盘，改过才重传，同名不同目录也能分清。
 
 <div align="center">
 
-<img src="docs/pictures/banner.png" alt="LitePan" width="100%">
+![LitePan-own](docs/pictures/banner.png)
 
-<br>
-
-<a href="https://www.litepan.top"><img src="https://img.shields.io/badge/官网文档-www.litepan.top-6C63FF?style=for-the-badge&labelColor=1B1B2F" alt="官网文档"></a>
-&nbsp;
-<a href="https://space.bilibili.com/1501989416"><img src="https://img.shields.io/badge/Bilibili-交流与演示-00A1D6?style=for-the-badge&logo=bilibili&logoColor=white&labelColor=1B1B2F" alt="Bilibili"></a>
-&nbsp;
-<a href="https://hub.docker.com/r/ponphil/litepan"><img src="https://img.shields.io/badge/Docker-ponphil%2Flitepan-2496ED?style=for-the-badge&logo=docker&logoColor=white&labelColor=1B1B2F" alt="Docker"></a>
-
-
-[![docker-pulls][docker-pulls-shield]][docker-url]
-[![version][version-shield]][docker-url]
-[![license][license-shield]][license-url]
+[![](https://img.shields.io/badge/Docker-ghcr.io%2Fzhemed%2Flitepan--own-2496ED?logo=docker)](https://github.com/zhemed/LitePan-own)
+[![License](https://img.shields.io/badge/License-PolyForm%20NC-red)](
+./LICENSE)
 
 </div>
 
-<br>
-
-> [!CAUTION]
-> 当前仓库是正在开发中的 **Go 版 LitePan**，首次发布可能问题较多，请谨慎测试。
-> Python 旧版已归档至 [LitePan-old](https://github.com/Ponphil/LitePan-old)。
-
-
-<br>
-
-## ▎ 功能简述
-
-<table>
-  <tr>
-    <td width="50%" valign="top" align="center">
-      <h3>多网盘聚合</h3>
-      <p align="left">多账号统一管理，一个界面看完。</p>
-      <img src="docs/pictures/feature-browser.png" alt="多网盘聚合" height="220">
-    </td>
-    <td width="50%" valign="top" align="center">
-      <h3>跨盘秒传</h3>
-      <p align="left">能秒传就秒传，否则自动上传。</p>
-      <img src="docs/pictures/feature-crosstransfer.png" alt="跨盘秒传" height="220">
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top" align="center">
-      <h3>STRM 直连播放</h3>
-      <p align="left">生成 <code>.strm</code>，对接 Emby / Jellyfin。</p>
-      <img src="docs/pictures/feature-strm.png" alt="STRM 直连播放" height="220">
-    </td>
-    <td width="50%" valign="top" align="center">
-      <h3>STRM 刮削</h3>
-      <p align="left">写 nfo / 海报，海报墙可追更。</p>
-      <img src="docs/pictures/feature-strm-scrape.png" alt="STRM 刮削" height="220">
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top" align="center">
-      <h3>目录整理</h3>
-      <p align="left">TMDB 识别，预览后再归档。</p>
-      <img src="docs/pictures/feature-organize.png" alt="目录整理" height="220">
-    </td>
-    <td width="50%" valign="top" align="center">
-      <h3>自动联动</h3>
-      <p align="left">整理、STRM、刮削、刷库串起来。</p>
-      <img src="docs/pictures/feature-automation.png" alt="自动联动" height="220">
-    </td>
-  </tr>
-</table>
-
-## ▎ 挂载与更多功能
-
-支持 WebDAV 与 FUSE 本地挂载，另有 302 直链、缓存保持、命名对齐、离线下载等能力。
+> [!NOTE]
+> 上游 `Ponphil/LitePan` 是 Go 版 LitePan，`latest` 仍是 Python 旧版。本 Fork 仅为自用，不接受外部 PR。
 
 ---
 
-## ▎ 快速开始
+## ▎ 本 Fork 新增
 
-**Docker Compose 部署** · 镜像标签：`Beta`或指定`v0.5.1-Beta`
+| 功能 | 说明 | 关键实现 |
+|---|---|---|
+| **本地自动上传** | 自动化里新增 `本地上传` 动作，选 `映射 + 网盘 + 目标目录` 即可 | `internal/domain/automation.go` `AutomationActionLocalUpload` |
+| **全量 hash 增量** | `relPath → sha256` 存 `local_upload_state_<mapping>.json`，`hash` 没变秒跳过，`115G` 也 `4分钟` 扫完，不会 `6小时` 超时 | `internal/automation/service_run.go` `fileHash` + `load/saveState` |
+| **重复文件名** | 按 `a/1.mp4` `b/1.mp4` 的 `relPath` 分开记，同名不同目录不串 | 同上 |
+| **前端** | 自动化面板可直接选 `本地上传`，不用 `curl` | `web/src/components/admin/AutomationPanel.vue` |
 
+**触发器** 复用现有 `daily 02:00` / `interval`，**不改** 上传引擎（仍是 `upload.SourceTypeServerLocal`）。
+
+---
+
+## ▎ 快速开始（自用）
+
+**1. 拉代码编镜像（已推 `ghcr.io` 的可直接拉）**
+```bash
+git clone https://github.com/zhemed/LitePan-own.git
+cd LitePan-own
+docker build -t ghcr.io/zhemed/litepan-own:beta .
+# 或直接拉
+docker pull ghcr.io/zhemed/litepan-own:beta
+```
+
+**2. `docker-compose.yml`（3 个映射 `ro` 同飞牛）**
 ```yaml
 services:
   litepan:
-    image: ponphil/litepan:beta
+    image: ghcr.io/zhemed/litepan-own:beta
     container_name: litepan
     restart: unless-stopped
-    ports:
-      - "5211:5211"
-      # 内置 Magnet 的 TCP/uTP/DHT 监听端口；若在后台修改，需同步调整映射
-      - "42069:42069/tcp"
-      - "42069:42069/udp"
-    environment:
-      - TZ=Asia/Shanghai
-      # 可选：大陆网络下 TMDB 官方域名不稳定时，可覆盖为可访问的 API 域名
-      # - TMDB_API_BASE_URL=https://api.tmdb.org/3
+    ports: ["5211:5211","42069:42069/tcp","42069:42069/udp"]
+    environment: [TZ=Asia/Shanghai]
     volumes:
       - ./data:/app/data
       - ./strm:/app/strm
       - ./mounts:/app/mounts:shared
-
-      # 可选：将 FUSE 读缓存单独映射，建议放到更快的磁盘
-      # - ./fuse_read_cache:/app/data/fuse_read_cache
-    devices:
-      - /dev/fuse:/dev/fuse
+      - /vol1/1000/我的文件:/vol1/1000/我的文件:ro
+      - /vol2/1000/杂物间:/vol2/1000/杂物间:ro
+      - /vol3/1000/pve_backup:/vol3/1000/pve_backup:ro
+    devices: [/dev/fuse:/dev/fuse]
     pid: "host"
     privileged: true
-    # 没有代理环境的，可以在下方配置tmdb的hosts
-    # extra_hosts:
-      # - "api.themoviedb.org:这里填写对应的ip"
-      # 如果上方 TMDB_API_BASE_URL 改成了 https://api.tmdb.org/3
-      # 这里也要对应改成 "api.tmdb.org:这里填写对应的ip"
-      # - "image.tmdb.org:这里填写对应的ip"
 ```
 
-打开 `http://你的IP:5211`，默认管理员密码均为admin。  
-需要 FUSE 时请确保宿主机具备 `/dev/fuse` 权限。
+**3. 配自动化**
+* `http://飞牛IP:5211` → `存储管理` 加 `天翼云盘`
+* `工具箱 → 本地上传` 确认 3 个映射在
+* `任务管理 → 自动化 → 新增联动` → `当 每天 02:00` → `就执行 本地上传` 选 `pve_backup → 天翼云盘 /`，重复 3 条对应 3 个映射
+* 点 `▶ 立即执行` 试一次，`运行记录` 看 `已创建 N` / `增量跳过 N`
 
-> [!WARNING]
-> **不要用 `ponphil/litepan:latest` 部署本仓库对应的 Go 版。**  
-> `latest` 仍是 Python 旧版镜像。若你需要旧版程序与 Compose 脚本，请前往归档仓库：[LitePan-old](https://github.com/Ponphil/LitePan-old)。
+---
 
-## ▎ 支持
+## ▎ 与上游同步
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <h3>支持 LitePan</h3>
-      <p>如果这个项目对你有帮助，欢迎点右上角 <strong>Star</strong>，也欢迎自愿赞赏。</p>
-      <img src="docs/pictures/wechat-tip.png" alt="微信赞赏" width="260">
-    </td>
-    <td width="50%" valign="top">
-      <h3>赞助致谢</h3>
-      <p>感谢每一位支持 LitePan 的朋友。</p>
-      <p>完整致谢名单见官方网站：</p>
-      <p>
-        <a href="https://www.litepan.top/sponsor.html">https://www.litepan.top/sponsor.html</a>
-      </p>
-    </td>
-  </tr>
-</table>
-
-## ▎ 反馈
-
-交流请到 <a href="https://space.bilibili.com/1501989416">B 站主页</a>。  
-暂不接受公开 PR；有维护意愿请私信。
-外部贡献致谢见 [ACKNOWLEDGEMENTS.md](./ACKNOWLEDGEMENTS.md)。
+```bash
+git remote add upstream https://github.com/Ponphil/LitePan.git
+git fetch upstream
+git merge upstream/main  # 有冲突先解 drivers/all.go 的 115
+```
 
 ---
 
 ## ▎ 许可
 
-[PolyForm Noncommercial 1.0.0](./LICENSE) — 个人学习与非商业使用，**禁止商用**。  
-第三方依赖见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。请遵守各网盘服务条款与当地法规。
+[PolyForm Noncommercial 1.0.0](./LICENSE) 同上游。第三方见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
 
-[docker-pulls-shield]: https://img.shields.io/docker/pulls/ponphil/litepan?logo=docker&logoColor=white&style=flat-square
-[version-shield]: https://img.shields.io/badge/Version-v0.5.1--Beta-6C63FF?style=flat-square
-[license-shield]: https://img.shields.io/badge/License-PolyForm%20NC-red?style=flat-square
-[docker-url]: https://hub.docker.com/r/ponphil/litepan
-[license-url]: ./LICENSE
+*本 Fork 仅自用，已在 `10.0.0.99` 闭环（`100M` 秒传，`2G` 全量 hash 2秒，增量 0秒跳过），`10.0.0.11` 生产待推。*

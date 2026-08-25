@@ -34,20 +34,23 @@
 
 ## ▎ 快速开始（自用）
 
-**1. 拉代码编镜像（已推 `ghcr.io` 的可直接拉）**
+**1. 拉代码编镜像（已推 `ghcr.io` 的可直接拉，`0.0.1` 定版）**
 ```bash
 git clone https://github.com/zhemed/LitePan-own.git
 cd LitePan-own
-docker build -t ghcr.io/zhemed/litepan-own:beta .
-# 或直接拉
-docker pull ghcr.io/zhemed/litepan-own:beta
+git checkout v0.0.1
+docker build -t ghcr.io/zhemed/litepan-own:0.0.1 .
+# 或直接拉定版（推荐，版本确定）
+docker pull ghcr.io/zhemed/litepan-own:0.0.1
+# beta 始终指向最新
+# docker pull ghcr.io/zhemed/litepan-own:beta
 ```
 
-**2. `docker-compose.yml`（3 个映射 `ro` 同飞牛）**
+**2. `docker-compose.yml`（3 个映射 `ro` 同飞牛，锁定 `0.0.1`）**
 ```yaml
 services:
   litepan:
-    image: ghcr.io/zhemed/litepan-own:beta
+    image: ghcr.io/zhemed/litepan-own:0.0.1
     container_name: litepan
     restart: unless-stopped
     ports: ["5211:5211","42069:42069/tcp","42069:42069/udp"]

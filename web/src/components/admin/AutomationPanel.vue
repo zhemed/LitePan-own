@@ -529,6 +529,30 @@
               </button>
             </div>
           </template>
+          <template v-else-if="configAction.type === 'local_upload'">
+            <div class="cfg-row">
+              <label>目标网盘</label>
+              <AppSelect v-model="configAction.params.account_id" :options="localUploadAccountOptions" placeholder="请选择网盘账号" />
+            </div>
+            <div class="cfg-row">
+              <label>本地映射</label>
+              <AppSelect v-model="configAction.params.mapping" :options="localMappingOptions" placeholder="请选择映射目录" />
+              <div class="field-tip">来自 工具箱 → 本地上传 的映射（我的文件 / 杂物间 / pve_backup）</div>
+            </div>
+            <div class="cfg-row">
+              <label>网盘目标目录ID</label>
+              <input v-model.trim="configAction.params.target_parent_id" class="ctrl" type="text" placeholder="根目录填 / ，或填网盘文件夹ID">
+              <div class="field-tip">可在网盘文件浏览里复制目标文件夹ID，根目录填 /</div>
+            </div>
+            <div class="cfg-row">
+              <label>冲突策略</label>
+              <AppSelect v-model="configAction.params.conflict_policy" :options="localUploadConflictOptions" />
+            </div>
+            <div class="cfg-row">
+              <label>子路径（可选）</label>
+              <input v-model.trim="configAction.params.source_path" class="ctrl" type="text" placeholder="留空表示整个映射，填子目录如 sub/dir">
+            </div>
+          </template>
         </div>
 
         <div class="modal-actions">
@@ -731,6 +755,23 @@ const ACTION_DEFINITIONS = {
     ),
     nodeTitle: action => `Emby ${embyRefreshModeLabel(action)}「${embyRefreshTargetLabel(action)}」`,
     previewTitle: action => `Emby${embyRefreshModeLabel(action)}[${embyRefreshTargetLabel(action)}]`
+  },
+  local_upload: {
+    label: '本地上传',
+    optionLabel: '本地上传',
+    icon: 'fas fa-upload',
+    desc: '将服务器映射目录的文件自动上传到指定网盘目录',
+    normalize: params => ({
+      account_id: Number(params.account_id || 0),
+      mapping: String(params.mapping || ''),
+      target_parent_id: String(params.target_parent_id || params.target_path || ''),
+      target_display_path: String(params.target_display_path || ''),
+      conflict_policy: ['skip', 'rename', 'overwrite'].includes(params.conflict_policy) ? params.conflict_policy : 'overwrite',
+      source_path: String(params.source_path || params.path || '')
+    }),
+    canApply: action => Number(action.params.account_id || 0) > 0 && Boolean(String(action.params.mapping || '').trim()) && Boolean(String(action.params.target_parent_id || action.params.target_path || '').trim()),
+    nodeTitle: action => `上传「${String(action.params.mapping || '')}」→ ${String(action.params.target_display_path || action.params.target_parent_id || '/')}`,
+    previewTitle: action => `本地上传[${String(action.params.mapping || '')}]`
   }
 }
 
@@ -787,6 +828,21 @@ const embyLibraryOptions = computed(() => embyLibraries.value.map(item => ({
   value: item.id,
   label: item.name
 })))
+
+const localUploadAccountOptions = computed(() => accounts.value.map(acc => ({
+  value: acc.id,
+  label: acc.name
+})))
+const localMappingOptions = [
+  { value: '我的文件', label: '我的文件' },
+  { value: '杂物间', label: '杂物间' },
+  { value: 'pve_backup', label: 'pve_backup' }
+]
+const localUploadConflictOptions = [
+  { value: 'overwrite', label: '覆盖（默认）' },
+  { value: 'skip', label: '跳过' },
+  { value: 'rename', label: '重命名' }
+]
 
 const linkedActionItems = computed(() => (
   form.actions

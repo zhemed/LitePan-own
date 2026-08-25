@@ -90,6 +90,27 @@ func (s *Service) ValidateRule(ctx context.Context, actions []RuleAction) (Valid
 			if s.emby == nil || !s.hasEmbyConfig(embyID) {
 				issues = append(issues, ValidationIssue{Level: "error", Message: "所选 Emby 配置不存在", ActionIndex: index, ActionType: action.Type})
 			}
+		case domain.AutomationActionLocalUpload:
+			accountID := int64(anyInt(action.Params["account_id"]))
+			if accountID <= 0 {
+				issues = append(issues, ValidationIssue{Level: "error", Message: "未选择目标网盘账号", ActionIndex: index, ActionType: action.Type})
+				continue
+			}
+			mapping := strings.TrimSpace(anyString(action.Params["mapping"]))
+			if mapping == "" {
+				issues = append(issues, ValidationIssue{Level: "error", Message: "未选择本地映射目录", ActionIndex: index, ActionType: action.Type})
+				continue
+			}
+			targetID := strings.TrimSpace(anyString(action.Params["target_parent_id"]))
+			if targetID == "" {
+				targetID = strings.TrimSpace(anyString(action.Params["target_path"]))
+			}
+			if targetID == "" {
+				targetID = strings.TrimSpace(anyString(action.Params["target_display_path"]))
+			}
+			if targetID == "" {
+				issues = append(issues, ValidationIssue{Level: "error", Message: "未选择网盘目标目录", ActionIndex: index, ActionType: action.Type})
+			}
 		}
 	}
 	if len(organizeActions) > 0 && len(strmActions) > 0 {
@@ -214,7 +235,7 @@ func (s *Service) normalizeInput(ctx context.Context, in RuleInput) (RuleInput, 
 		}
 		in.Actions[i].Type = strings.TrimSpace(in.Actions[i].Type)
 		switch in.Actions[i].Type {
-		case domain.AutomationActionOrganize, domain.AutomationActionStrm, domain.AutomationActionStrmScrape, domain.AutomationActionCacheClear, domain.AutomationActionDelay, domain.AutomationActionEmbyRefresh:
+		case domain.AutomationActionOrganize, domain.AutomationActionStrm, domain.AutomationActionStrmScrape, domain.AutomationActionCacheClear, domain.AutomationActionDelay, domain.AutomationActionEmbyRefresh, domain.AutomationActionLocalUpload:
 		default:
 			return in, domain.Errorf(domain.CodeValidation, "存在不支持的动作")
 		}

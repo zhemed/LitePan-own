@@ -171,6 +171,9 @@ func wireServices(cfg config.Config, logs *logx.Manager, st *storeBundle, core *
 		Organize:   mediaOrganizeSvc,
 		Emby:       embyProxySvc,
 		Files:      fileSvc,
+		Uploads:    uploadSvc,
+		Settings:   st.settings,
+		DataDir:    cfg.DataDir,
 		Log:        logs.For(logx.ModuleSystem),
 	})
 	automationSvc.Register(core.bus)

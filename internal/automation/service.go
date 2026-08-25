@@ -11,8 +11,10 @@ import (
 	"litepan/internal/embyproxy"
 	filesvc "litepan/internal/file"
 	"litepan/internal/mediaorganize"
+	"litepan/internal/settings"
 	"litepan/internal/strm"
 	"litepan/internal/strmscrape"
+	"litepan/internal/upload"
 )
 
 type Service struct {
@@ -24,6 +26,9 @@ type Service struct {
 	organize   *mediaorganize.Service
 	emby       *embyproxy.Service
 	files      *filesvc.Service
+	uploads    *upload.Manager
+	settings   *settings.Service
+	dataDir    string
 	log        *slog.Logger
 
 	mu            sync.Mutex
@@ -44,6 +49,9 @@ type Options struct {
 	Organize   *mediaorganize.Service
 	Emby       *embyproxy.Service
 	Files      *filesvc.Service
+	Uploads    *upload.Manager
+	Settings   *settings.Service
+	DataDir    string
 	Log        *slog.Logger
 }
 
@@ -137,6 +145,9 @@ func New(opts Options) *Service {
 		organize:     opts.Organize,
 		emby:         opts.Emby,
 		files:        opts.Files,
+		uploads:      opts.Uploads,
+		settings:     opts.Settings,
+		dataDir:      opts.DataDir,
 		log:          log,
 		runningStep:  make(map[int64]map[string]any),
 		pendingCount: make(map[int64]int),

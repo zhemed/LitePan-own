@@ -567,11 +567,27 @@ func (s *Service) runLocalUpload(ctx context.Context, params map[string]any) map
 	if accountID <= 0 {
 		return map[string]any{"status": "failed", "success": false, "message": "未选择目标网盘账号"}
 	}
-	mappingName := strings.TrimSpace(anyString(params["mapping"]))
-	if mappingName == "" {
-		mappingName = strings.TrimSpace(anyString(params["mapping_name"]))
+	// 支持多选 mappings，兼容单 mapping
+	var mappingNames []string
+	if rawArr, ok := params["mappings"]; ok {
+		if arr, ok := rawArr.([]any); ok {
+			for _, v := range arr {
+				if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+					mappingNames = append(mappingNames, strings.TrimSpace(s))
+				}
+			}
+		} else if s, ok := rawArr.(string); ok && strings.TrimSpace(s) != "" {
+			mappingNames = append(mappingNames, strings.TrimSpace(s))
+		}
 	}
-	if mappingName == "" {
+	if len(mappingNames) == 0 {
+		if m := strings.TrimSpace(anyString(params["mapping"])); m != "" {
+			mappingNames = append(mappingNames, m)
+		} else if m := strings.TrimSpace(anyString(params["mapping_name"])); m != "" {
+			mappingNames = append(mappingNames, m)
+		}
+	}
+	if len(mappingNames) == 0 {
 		return map[string]any{"status": "failed", "success": false, "message": "未选择本地映射目录"}
 	}
 	targetParent := strings.TrimSpace(anyString(params["target_parent_id"]))
@@ -595,25 +611,31 @@ func (s *Service) runLocalUpload(ctx context.Context, params map[string]any) map
 	if err := json.Unmarshal([]byte(raw), &mappings); err != nil {
 		return map[string]any{"status": "failed", "success": false, "message": "读取映射配置失败"}
 	}
-	var mappingPath string
-	for _, m := range mappings {
-		if strings.TrimSpace(m.Name) == mappingName {
-			mappingPath = strings.TrimSpace(m.Path)
-			break
+	// 循环处理多个映射，汇总结果
+	var totalScanned, totalCreated, totalSkippedByHash, totalSkipped int
+	var allMsgs []string
+	for _, mappingName := range mappingNames {
+		var mappingPath string
+		for _, m := range mappings {
+			if strings.TrimSpace(m.Name) == mappingName {
+				mappingPath = strings.TrimSpace(m.Path)
+				break
+			}
 		}
-	}
-	if mappingPath == "" {
-		return map[string]any{"status": "failed", "success": false, "message": fmt.Sprintf("映射不存在：%s", mappingName)}
-	}
-	mappingPath = filepath.Clean(mappingPath)
-	sourceRoot := mappingPath
-	if sourceSubPath != "" {
-		clean := filepath.Clean(filepath.Join(mappingPath, filepath.FromSlash(sourceSubPath)))
-		if !strings.HasPrefix(clean, mappingPath) && clean != mappingPath {
-			return map[string]any{"status": "failed", "success": false, "message": "源路径超出映射范围"}
+		if mappingPath == "" {
+			allMsgs = append(allMsgs, fmt.Sprintf("映射不存在：%s", mappingName))
+			continue
 		}
-		sourceRoot = clean
-	}
+		mappingPath = filepath.Clean(mappingPath)
+		sourceRoot := mappingPath
+		if sourceSubPath != "" {
+			clean := filepath.Clean(filepath.Join(mappingPath, filepath.FromSlash(sourceSubPath)))
+			if !strings.HasPrefix(clean, mappingPath) && clean != mappingPath {
+				allMsgs = append(allMsgs, fmt.Sprintf("源路径超出映射范围：%s", mappingName))
+				continue
+			}
+			sourceRoot = clean
+		}
 	info, err := os.Stat(sourceRoot)
 	if err != nil {
 		return map[string]any{"status": "failed", "success": false, "message": fmt.Sprintf("源目录不存在：%v", err)}
@@ -657,7 +679,8 @@ func (s *Service) runLocalUpload(ctx context.Context, params map[string]any) map
 		}
 	}
 	if len(allSources) == 0 {
-		return map[string]any{"status": "success", "success": true, "message": "没有需要上传的文件", "data": map[string]any{"total": 0}}
+		allMsgs = append(allMsgs, fmt.Sprintf("[%s] 空目录", mappingName))
+		continue
 	}
 	if targetParent == "" {
 		return map[string]any{"status": "failed", "success": false, "message": "未指定网盘目标目录"}
@@ -690,7 +713,10 @@ func (s *Service) runLocalUpload(ctx context.Context, params map[string]any) map
 	}
 	if len(sources) == 0 {
 		saveLocalUploadState(s.dataDir, mappingName, newState)
-		return map[string]any{"status": "success", "success": true, "message": fmt.Sprintf("增量检查：%d 个文件均未变化，已跳过", skippedByHash), "data": map[string]any{"scanned": len(allSources), "created": 0, "skipped": skippedByHash}}
+		allMsgs = append(allMsgs, fmt.Sprintf("[%s] 增量跳过 %d 个", mappingName, skippedByHash))
+		totalScanned += len(allSources)
+		totalSkippedByHash += skippedByHash
+		continue
 	}
 	const batchSize = 100
 	batch := make([]upload.CreateParams, 0, batchSize)
@@ -810,15 +836,35 @@ func (s *Service) runLocalUpload(ctx context.Context, params map[string]any) map
 	if skipped == 0 {
 		saveLocalUploadState(s.dataDir, mappingName, newState)
 	}
-	msg := fmt.Sprintf("已创建 %d 个上传任务", createdCount)
+	msg := fmt.Sprintf("[%s] 已创建 %d 个", mappingName, createdCount)
 	if skippedByHash > 0 {
-		msg += fmt.Sprintf("，增量跳过 %d 个未变化文件", skippedByHash)
+		msg += fmt.Sprintf("，跳过 %d", skippedByHash)
 	}
 	if skipped > 0 {
-		msg += fmt.Sprintf("，%d 个失败：%v", skipped, firstErr)
-		return map[string]any{"status": "failed", "success": false, "message": msg, "data": map[string]any{"created": createdCount, "skipped": skipped, "skippedByHash": skippedByHash}}
+		msg += fmt.Sprintf("，%d 失败：%v", skipped, firstErr)
 	}
-	return map[string]any{"status": "success", "success": true, "message": msg, "data": map[string]any{"created": createdCount, "scanned": len(allSources), "skippedByHash": skippedByHash}}
+	allMsgs = append(allMsgs, msg)
+		totalScanned += len(allSources)
+		totalCreated += createdCount
+		totalSkippedByHash += skippedByHash
+		totalSkipped += skipped
+	}
+	// 汇总
+	if len(allMsgs) > 0 && totalCreated == 0 && totalSkipped == 0 {
+		// 全部跳过的情况
+		return map[string]any{"status": "success", "success": true, "message": "增量检查：" + fmt.Sprintf("%d 个文件均未变化，已跳过", totalSkippedByHash), "data": map[string]any{"scanned": totalScanned, "created": 0, "skipped": totalSkippedByHash}}
+	}
+	msgTotal := fmt.Sprintf("共 %d 个映射，已创建 %d 个上传任务", len(mappingNames), totalCreated)
+	if totalSkippedByHash > 0 {
+		msgTotal += fmt.Sprintf("，跳过 %d 个未变化", totalSkippedByHash)
+	}
+	if len(allMsgs) > 0 {
+		msgTotal += "；" + strings.Join(allMsgs, "；")
+	}
+	if totalSkipped > 0 {
+		return map[string]any{"status": "failed", "success": false, "message": msgTotal, "data": map[string]any{"created": totalCreated, "scanned": totalScanned, "skipped": totalSkipped, "skippedByHash": totalSkippedByHash}}
+	}
+	return map[string]any{"status": "success", "success": true, "message": msgTotal, "data": map[string]any{"created": totalCreated, "scanned": totalScanned, "skippedByHash": totalSkippedByHash}}
 }
 
 type submitRunResult struct {

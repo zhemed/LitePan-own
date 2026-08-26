@@ -535,9 +535,14 @@
               <AppSelect v-model="configAction.params.account_id" :options="localUploadAccountOptions" placeholder="请选择网盘账号" />
             </div>
             <div class="cfg-row">
-              <label>本地映射</label>
-              <AppSelect v-model="configAction.params.mapping" :options="localMappingOptions" placeholder="请选择映射目录" />
-              <div class="field-tip">来自 工具箱 → 本地上传 的映射（我的文件 / 杂物间 / pve_backup）</div>
+              <label>本地映射（多选）</label>
+              <div style="display:flex;gap:12px;flex-wrap:wrap">
+                <label v-for="opt in localMappingOptions" :key="opt.value" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                  <input type="checkbox" :value="opt.value" :checked="isMappingChecked(configAction, opt.value)" @change="toggleMapping(configAction, opt.value, $event.target.checked)" />
+                  {{ opt.label }}
+                </label>
+              </div>
+              <div class="field-tip">可多选，默认全选；来自 工具箱 → 本地上传（我的文件 / 杂物间 / pve_backup）</div>
             </div>
             <div class="cfg-row">
               <label>网盘目标目录ID</label>
@@ -761,17 +766,37 @@ const ACTION_DEFINITIONS = {
     optionLabel: '本地上传',
     icon: 'fas fa-upload',
     desc: '将服务器映射目录的文件自动上传到指定网盘目录',
-    normalize: params => ({
-      account_id: Number(params.account_id || 0),
-      mapping: String(params.mapping || ''),
-      target_parent_id: String(params.target_parent_id || params.target_path || ''),
-      target_display_path: String(params.target_display_path || ''),
-      conflict_policy: ['skip', 'rename', 'overwrite'].includes(params.conflict_policy) ? params.conflict_policy : 'overwrite',
-      source_path: String(params.source_path || params.path || '')
-    }),
-    canApply: action => Number(action.params.account_id || 0) > 0 && Boolean(String(action.params.mapping || '').trim()) && Boolean(String(action.params.target_parent_id || action.params.target_path || '').trim()),
-    nodeTitle: action => `上传「${String(action.params.mapping || '')}」→ ${String(action.params.target_display_path || action.params.target_parent_id || '/')}`,
-    previewTitle: action => `本地上传[${String(action.params.mapping || '')}]`
+    normalize: params => {
+      const raw = params.mappings ?? params.mapping ?? []
+      const arr = Array.isArray(raw) ? raw : (raw ? [String(raw)] : [])
+      const mappings = arr.map(v => String(v).trim()).filter(Boolean)
+      return {
+        account_id: Number(params.account_id || 0),
+        mappings,
+        mapping: mappings[0] || '',
+        target_parent_id: String(params.target_parent_id || params.target_path || ''),
+        target_display_path: String(params.target_display_path || ''),
+        conflict_policy: ['skip', 'rename', 'overwrite'].includes(params.conflict_policy) ? params.conflict_policy : 'overwrite',
+        source_path: String(params.source_path || params.path || '')
+      }
+    },
+    canApply: action => {
+      const a = action.params
+      const mappings = Array.isArray(a.mappings) ? a.mappings : (a.mapping ? [a.mapping] : [])
+      return Number(a.account_id || 0) > 0 && mappings.filter(v => String(v).trim()).length > 0 && Boolean(String(a.target_parent_id || a.target_path || '').trim())
+    },
+    nodeTitle: action => {
+      const a = action.params
+      const mappings = Array.isArray(a.mappings) ? a.mappings : (a.mapping ? [a.mapping] : [])
+      const label = mappings.length ? mappings.join('、') : String(a.mapping || '')
+      return `上传「${label}」→ ${String(a.target_display_path || a.target_parent_id || '/')}`
+    },
+    previewTitle: action => {
+      const a = action.params
+      const mappings = Array.isArray(a.mappings) ? a.mappings : (a.mapping ? [a.mapping] : [])
+      const label = mappings.length ? mappings.join('、') : String(a.mapping || '')
+      return `本地上传[${label}]`
+    }
   }
 }
 
@@ -843,6 +868,23 @@ const localUploadConflictOptions = [
   { value: 'skip', label: '跳过' },
   { value: 'rename', label: '重命名' }
 ]
+const isMappingChecked = (action, value) => {
+  const a = action.params
+  const mappings = Array.isArray(a.mappings) ? a.mappings : (a.mapping ? [a.mapping] : [])
+  return mappings.includes(value)
+}
+const toggleMapping = (action, value, checked) => {
+  const a = action.params
+  let mappings = Array.isArray(a.mappings) ? [...a.mappings] : (a.mapping ? [String(a.mapping)] : [])
+  mappings = mappings.map(v => String(v))
+  if (checked) {
+    if (!mappings.includes(value)) mappings.push(value)
+  } else {
+    mappings = mappings.filter(v => v !== value)
+  }
+  a.mappings = mappings
+  a.mapping = mappings[0] || ''
+}
 
 const linkedActionItems = computed(() => (
   form.actions

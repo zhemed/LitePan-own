@@ -96,8 +96,25 @@ func (s *Service) ValidateRule(ctx context.Context, actions []RuleAction) (Valid
 				issues = append(issues, ValidationIssue{Level: "error", Message: "未选择目标网盘账号", ActionIndex: index, ActionType: action.Type})
 				continue
 			}
-			mapping := strings.TrimSpace(anyString(action.Params["mapping"]))
-			if mapping == "" {
+			// 支持 mappings 多选，兼容旧的单 mapping
+			var mappings []string
+			if raw, ok := action.Params["mappings"]; ok {
+				if arr, ok := raw.([]any); ok {
+					for _, v := range arr {
+						if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+							mappings = append(mappings, strings.TrimSpace(s))
+						}
+					}
+				} else if s, ok := raw.(string); ok && strings.TrimSpace(s) != "" {
+					mappings = append(mappings, strings.TrimSpace(s))
+				}
+			}
+			if len(mappings) == 0 {
+				if m := strings.TrimSpace(anyString(action.Params["mapping"])); m != "" {
+					mappings = append(mappings, m)
+				}
+			}
+			if len(mappings) == 0 {
 				issues = append(issues, ValidationIssue{Level: "error", Message: "未选择本地映射目录", ActionIndex: index, ActionType: action.Type})
 				continue
 			}

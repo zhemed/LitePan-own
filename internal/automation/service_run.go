@@ -685,11 +685,57 @@ func (s *Service) runLocalUpload(ctx context.Context, params map[string]any) map
 	if targetParent == "" {
 		return map[string]any{"status": "failed", "success": false, "message": "未指定网盘目标目录"}
 	}
-	// 增量：全量 hash 对比
+	// 增量：全量 hash + 云端存在双重检查
 	state := loadLocalUploadState(s.dataDir, mappingName)
 	newState := make(map[string]string, len(state))
 	for k, v := range state {
 		newState[k] = v
+	}
+	// 为云端存在检查准备：先定义 ensureDir 供复用
+	targetDirsForCheck := map[string]string{"": targetParent}
+	ensureDirForCheck := func(relDir string) (string, error) {
+		relDir = strings.Trim(strings.ReplaceAll(relDir, "\\", "/"), "/")
+		if relDir == "" {
+			return targetParent, nil
+		}
+		if cached, ok := targetDirsForCheck[relDir]; ok {
+			return cached, nil
+		}
+		cur := targetParent
+		parts := strings.Split(relDir, "/")
+		key := ""
+		for _, part := range parts {
+			if part == "" {
+				continue
+			}
+			if key == "" {
+				key = part
+			} else {
+				key = key + "/" + part
+			}
+			if cached, ok := targetDirsForCheck[key]; ok {
+				cur = cached
+				continue
+			}
+			items, err := s.files.List(ctx, accountID, cur, false)
+			if err != nil {
+				return "", err
+			}
+			next := ""
+			for _, item := range items {
+				if item.IsDir && item.Name == part {
+					next = item.ID
+					break
+				}
+			}
+			if next == "" {
+				// 目标子目录不存在，说明云端该路径下肯定没有文件，直接返回 cur，让后续 List 判不存在
+				return cur, nil
+			}
+			cur = next
+			targetDirsForCheck[key] = cur
+		}
+		return cur, nil
 	}
 	var sources []src
 	var skippedByHash int
@@ -699,14 +745,37 @@ func (s *Service) runLocalUpload(ctx context.Context, params map[string]any) map
 		}
 		h, err := fileHash(sc.abs)
 		if err != nil {
-			// 读失败则当作需要上传
 			sources = append(sources, sc)
 			continue
 		}
 		if oldHash, ok := state[sc.relPath]; ok && oldHash == h {
-			skippedByHash++
-			newState[sc.relPath] = h
-			continue
+			// 本地未变，再查云端在不在，不在则重传
+			parentID, err := ensureDirForCheck(sc.relDir)
+			if err == nil {
+				if items, err := s.files.List(ctx, accountID, parentID, false); err == nil {
+					exists := false
+					for _, item := range items {
+						if !item.IsDir && item.Name == filepath.Base(sc.abs) {
+							exists = true
+							break
+						}
+					}
+					if exists {
+						skippedByHash++
+						newState[sc.relPath] = h
+						continue
+					}
+					// 云端不存在， fallthrough 到重传
+				} else {
+					skippedByHash++
+					newState[sc.relPath] = h
+					continue
+				}
+			} else {
+				skippedByHash++
+				newState[sc.relPath] = h
+				continue
+			}
 		}
 		newState[sc.relPath] = h
 		sources = append(sources, sc)

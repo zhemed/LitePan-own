@@ -536,13 +536,8 @@
             </div>
             <div class="cfg-row">
               <label>本地映射（多选）</label>
-              <div style="display:flex;gap:12px;flex-wrap:wrap">
-                <label v-for="opt in localMappingOptions" :key="opt.value" style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                  <input type="checkbox" :value="opt.value" :checked="isMappingChecked(configAction, opt.value)" @change="toggleMapping(configAction, opt.value, $event.target.checked)" />
-                  {{ opt.label }}
-                </label>
-              </div>
-              <div class="field-tip">可多选，默认全选；来自 工具箱 → 本地上传（我的文件 / 杂物间 / pve_backup）</div>
+              <AppSelect v-model="configAction.params.mappings" :options="localMappingOptions" placeholder="请选择映射目录" multiple />
+              <div class="field-tip">可多选；来自 工具箱 → 本地上传</div>
             </div>
             <div class="cfg-row">
               <label>网盘目标目录ID</label>
@@ -858,33 +853,20 @@ const localUploadAccountOptions = computed(() => accounts.value.map(acc => ({
   value: acc.id,
   label: acc.name
 })))
-const localMappingOptions = [
-  { value: '我的文件', label: '我的文件' },
-  { value: '杂物间', label: '杂物间' },
-  { value: 'pve_backup', label: 'pve_backup' }
-]
+const localMappingOptions = ref([])
+const fetchLocalMappings = async () => {
+  try {
+    const res = await fetch('/api/admin/tools/local-upload/config', { credentials: 'include' }).then(r => r.json())
+    const data = res?.data || res
+    const mappings = data?.mappings || []
+    localMappingOptions.value = mappings.map(m => ({ value: m.name, label: m.name }))
+  } catch {}
+}
 const localUploadConflictOptions = [
   { value: 'overwrite', label: '覆盖（默认）' },
   { value: 'skip', label: '跳过' },
   { value: 'rename', label: '重命名' }
 ]
-const isMappingChecked = (action, value) => {
-  const a = action.params
-  const mappings = Array.isArray(a.mappings) ? a.mappings : (a.mapping ? [a.mapping] : [])
-  return mappings.includes(value)
-}
-const toggleMapping = (action, value, checked) => {
-  const a = action.params
-  let mappings = Array.isArray(a.mappings) ? [...a.mappings] : (a.mapping ? [String(a.mapping)] : [])
-  mappings = mappings.map(v => String(v))
-  if (checked) {
-    if (!mappings.includes(value)) mappings.push(value)
-  } else {
-    mappings = mappings.filter(v => v !== value)
-  }
-  a.mappings = mappings
-  a.mapping = mappings[0] || ''
-}
 
 const linkedActionItems = computed(() => (
   form.actions
@@ -1199,6 +1181,9 @@ const openConfig = (mode, actionIndex = -1) => {
   if (actionIndex >= 0) ensureStrmRunMode(form.actions[actionIndex])
   if (mode === 'action') {
     const targetAction = pendingConfigAction.value || form.actions[actionIndex]
+    if (targetAction?.type === 'local_upload') {
+      void fetchLocalMappings()
+    }
     if (targetAction?.type === 'emby_refresh') {
       normalizeEmbyRefreshAction(targetAction)
       void ensureEmbyLibrariesLoaded()

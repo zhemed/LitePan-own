@@ -750,7 +750,7 @@ func (s *Service) runLocalUpload(ctx context.Context, params map[string]any) map
 		}
 		if oldHash, ok := state[sc.relPath]; ok && oldHash == h {
 			// 本地未变，再查云端在不在，不在则重传
-			parentID, err := ensureDirForCheck(sc.relDir)
+			parentID, err := ensureDirForCheck(filepath.Join(mappingName, sc.relDir))
 			if err == nil {
 				if items, err := s.files.List(ctx, accountID, parentID, false); err == nil {
 					exists := false
@@ -856,7 +856,7 @@ func (s *Service) runLocalUpload(ctx context.Context, params map[string]any) map
 		if err := ctx.Err(); err != nil {
 			return map[string]any{"status": "failed", "success": false, "message": "任务被取消"}
 		}
-		parent, err := ensureDir(sc.relDir)
+		parent, err := ensureDir(filepath.Join(mappingName, sc.relDir))
 		if err != nil {
 			skipped++
 			if firstErr == nil {
@@ -878,7 +878,7 @@ func (s *Service) runLocalUpload(ctx context.Context, params map[string]any) map
 			TargetPath:        parent,
 			TargetDisplayPath: func() string {
 				base := strings.Trim(targetDisplay, "/")
-				rel := strings.Trim(sc.relDir, "/")
+				rel := strings.Trim(filepath.Join(mappingName, sc.relDir), "/")
 				if rel == "" {
 					return base
 				}
